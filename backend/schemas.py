@@ -12,13 +12,14 @@ class GenereOut(BaseModel):
 
 
 class LibroBase(BaseModel):
+    # lunghezze massime = dimensioni delle colonne su Appwrite (scripts/migra_appwrite.py)
     codice: str | None = Field(default=None, max_length=50)
-    autore: str | None = Field(default=None, max_length=300)
+    autore: str | None = Field(default=None, max_length=255)
     titolo: str = Field(min_length=1, max_length=500)
-    editore: str | None = Field(default=None, max_length=200)
+    editore: str | None = Field(default=None, max_length=255)
     anno: str | None = Field(default=None, max_length=20)
-    premi: str | None = Field(default=None, max_length=300)
-    collocazione: str | None = Field(default=None, max_length=200)
+    premi: str | None = Field(default=None, max_length=500)
+    collocazione: str | None = Field(default=None, max_length=100)
     note: str | None = Field(default=None, max_length=2000)
     genere_id: int | None = None
 

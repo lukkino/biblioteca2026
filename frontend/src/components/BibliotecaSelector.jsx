@@ -71,7 +71,9 @@ function RenameDialog({ biblioteca, onClose, onSaved }) {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Rinomina biblioteca</DialogTitle>
-          <DialogDescription>File: {biblioteca.sorgente}</DialogDescription>
+          <DialogDescription>
+            {biblioteca.sorgente === "Appwrite" ? "Database online (Appwrite)" : `File: ${biblioteca.sorgente}`}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
           <div className="grid gap-1.5">

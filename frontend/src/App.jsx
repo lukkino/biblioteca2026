@@ -236,13 +236,19 @@ export default function App() {
           <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-6 py-16 text-center">
             <DatabaseZap className="size-10 text-muted-foreground" />
             <h2 className="text-lg font-semibold">Il database di “{current.nome}” non è ancora disponibile</h2>
-            <p className="max-w-md break-all text-sm text-muted-foreground">
-              {/[\\/:]/.test(current.sorgente) ? "Il file " : "Copia il file "}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">{current.sorgente}</code>
-              {/[\\/:]/.test(current.sorgente)
-                ? " non è stato trovato. Controlla il percorso in biblioteche.json e ricarica la pagina."
-                : " nella cartella del progetto (accanto a Biblioteca.db3) e ricarica la pagina."}
-            </p>
+            {current.sorgente === "Appwrite" ? (
+              <p className="max-w-md text-sm text-muted-foreground">
+                Il database online non risponde. Riprova tra qualche minuto ricaricando la pagina.
+              </p>
+            ) : (
+              <p className="max-w-md break-all text-sm text-muted-foreground">
+                {/[\\/:]/.test(current.sorgente) ? "Il file " : "Copia il file "}
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">{current.sorgente}</code>
+                {/[\\/:]/.test(current.sorgente)
+                  ? " non è stato trovato. Controlla il percorso in biblioteche.json e ricarica la pagina."
+                  : " nella cartella del progetto (accanto a Biblioteca.db3) e ricarica la pagina."}
+              </p>
+            )}
             {biblioteche.some((b) => b.disponibile && b.id !== current.id) && (
               <Button variant="outline" className="mt-2 h-9"
                 onClick={() => changeBiblioteca(biblioteche.find((b) => b.disponibile && b.id !== current.id).id)}>

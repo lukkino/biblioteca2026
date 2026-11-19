@@ -4,7 +4,8 @@ Web app per consultare e gestire il catalogo della biblioteca di casa (~6.500 li
 
 - **Frontend**: React 19 + Vite + Tailwind CSS + componenti shadcn/ui
 - **Backend**: FastAPI + SQLAlchemy 2 (Python)
-- **Database**: SQLite locale (`Biblioteca.db3`), predisposto per il passaggio a Supabase/PostgreSQL
+- **Database**: online su [Appwrite](https://appwrite.io) (un database per biblioteca); in alternativa
+  file SQLite locali (`.db3` del vecchio programma) o Supabase/PostgreSQL
 
 ## Funzionalità
 
@@ -20,10 +21,10 @@ Web app per consultare e gestire il catalogo della biblioteca di casa (~6.500 li
 
 - Python 3.12+ (sviluppato con 3.14)
 - Node.js 20.19+ (sviluppato con 24)
-- Il file di database `Biblioteca.db3` nella cartella principale del progetto
+- Un progetto Appwrite con le chiavi in `.env` (vedi [Database online](#database-online-appwrite)),
+  oppure il file `Biblioteca.db3` nella cartella principale
 
-> Il database **non è incluso nel repository** perché contiene dati personali.
-> Va copiato a mano nella cartella principale prima di avviare l'app.
+> I dati **non sono inclusi nel repository** perché sono personali: né i file `.db3`, né `.env` con le chiavi.
 
 ## Installazione
 
@@ -52,12 +53,33 @@ npm run dev
 
 Il frontend inoltra le chiamate `/api/*` al backend sulla porta 8000 (proxy configurato in `frontend/vite.config.js`).
 
-> ⚠️ L'app scrive **direttamente** sui file `.db3`: conviene tenerne una copia di sicurezza.
+## Database online (Appwrite)
 
-## Più biblioteche
+Ogni biblioteca è un **database** del progetto Appwrite, con le tabelle `libri` e `generi`.
+Il nome del database è il nome della biblioteca mostrato nell'app (si cambia anche dall'app).
 
-Le biblioteche sono elencate in `biblioteche.json` nella cartella principale
-(escluso dal repository; c'è un esempio in `biblioteche.example.json`):
+1. In `.env` (copiato da `.env.example`):
+   ```
+   APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
+   APPWRITE_PROJECT_ID=<id progetto>
+   APPWRITE_API_KEY=<chiave con scopes Database e users.read/write>
+   ```
+2. Migrare una biblioteca dal file del vecchio programma (crea database e tabelle se mancano,
+   mantiene gli ID dei libri, si può rilanciare senza creare doppioni, verifica il risultato):
+   ```powershell
+   .venv\Scripts\python scripts\migra_appwrite.py Biblioteca.db3 biblioteca1 "Casa"
+   ```
+3. Senza `biblioteche.json`, l'app mostra automaticamente tutte le biblioteche presenti su Appwrite.
+
+Il backend tiene in memoria una copia del catalogo (pochi MB): ricerca e ordinamento sono istantanei
+e identici alla versione SQLite. Ogni modifica è scritta subito su Appwrite; la copia si ricarica
+comunque ogni 10 minuti. La chiave API resta solo sul backend: il browser non parla mai con Appwrite.
+
+## Più biblioteche con file locali
+
+In alternativa ad Appwrite, le biblioteche si possono elencare in `biblioteche.json` nella cartella
+principale (escluso dal repository; c'è un esempio in `biblioteche.example.json`). Se il file esiste,
+ha la precedenza su Appwrite:
 
 ```json
 [
@@ -68,7 +90,10 @@ Le biblioteche sono elencate in `biblioteche.json` nella cartella principale
 
 - **`id`**: identificativo fisso, usato negli indirizzi delle API. Non va cambiato.
 - **`nome`**: il nome mostrato nell'app. Si può cambiare anche dall'app (matita accanto al nome).
-- **`file`**: il database SQLite, con la stessa struttura di `Biblioteca.db3`.
+- **`file`**: il database SQLite, con la stessa struttura di `Biblioteca.db3`
+  (oppure `"appwrite": "<id database>"` per una biblioteca su Appwrite).
+
+> ⚠️ Con i file `.db3` l'app scrive **direttamente** sui file: conviene tenerne una copia di sicurezza.
 
 Per **aggiungere una biblioteca** basta aggiungere una voce e copiare il file `.db3` nella cartella.
 Finché il file non c'è, l'app mostra la biblioteca come "non disponibile" (il file non viene mai creato
@@ -84,16 +109,22 @@ modificare lo stesso libro contemporaneamente dai due programmi.
 ```
 biblioteche.json   elenco delle biblioteche e dei loro database (locale, non versionato)
 backend/
-  database.py      connessione ai DB delle biblioteche (legge biblioteche.json e .env)
+  database.py      elenco delle biblioteche (biblioteche.json, Appwrite o default) e connessioni SQL
+  appwrite_client.py  collegamento ad Appwrite
+  store_appwrite.py   libri su Appwrite (copia in memoria + scritture su Appwrite)
+  store_sql.py     libri su SQLite/PostgreSQL
   models.py        mappatura delle tabelle esistenti Biblioteca e Genere
   schemas.py       validazione dei dati in ingresso/uscita (Pydantic)
   main.py          endpoint REST
+scripts/
+  migra_appwrite.py  migrazione di una biblioteca da .db3 ad Appwrite
 frontend/
   src/api/libri.js tutte le chiamate al backend
   src/App.jsx      pagina principale (tabella, ricerca, filtri, paginazione)
   src/components/  finestra inserimento/modifica e componenti UI
 tests/
-  test_api.py      test del backend (lavorano su una copia del DB)
+  test_api.py      test del backend su una copia del DB, sia SQLite sia Appwrite simulato
+  fake_appwrite.py Appwrite finto in memoria (i test non toccano mai l'Appwrite vero)
 ```
 
 ## API
