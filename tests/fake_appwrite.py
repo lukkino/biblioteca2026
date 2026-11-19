@@ -6,6 +6,36 @@ from types import SimpleNamespace as NS
 from appwrite.exception import AppwriteException
 
 
+class FakeAuth:
+    """Sostituti di appwrite_client.login / user_for_session / logout."""
+
+    def __init__(self):
+        self.users: dict[str, tuple[str, dict]] = {}   # email -> (password, utente)
+        self.sessions: dict[str, dict] = {}            # secret -> utente
+        self._n = 0
+
+    def add_user(self, email, password, name, labels=("biblioteca",)):
+        self.users[email] = (password, {"id": email, "name": name, "email": email, "labels": list(labels)})
+
+    def login(self, email, password):
+        pw, user = self.users.get(email, (None, None))
+        if pw is None or pw != password:
+            raise AppwriteException("Invalid credentials", 401, "user_invalid_credentials")
+        self._n += 1
+        secret = f"segreto-{self._n}"
+        self.sessions[secret] = user
+        return secret, user
+
+    def user_for_session(self, secret):
+        if secret not in self.sessions:
+            raise AppwriteException("Unauthorized", 401, "user_unauthorized")
+        return self.sessions[secret]
+
+    def logout(self, secret):
+        if self.sessions.pop(secret, None) is None:
+            raise AppwriteException("Unauthorized", 401, "user_unauthorized")
+
+
 class FakeTablesDB:
     def __init__(self):
         self.databases: dict[str, str] = {}               # id -> nome

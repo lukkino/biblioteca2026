@@ -20,13 +20,22 @@ from fastapi.testclient import TestClient  # noqa: E402
 from backend import appwrite_client, database  # noqa: E402
 from backend.main import app  # noqa: E402
 from backend.store_appwrite import reset_stores  # noqa: E402
-from tests.fake_appwrite import FakeTablesDB  # noqa: E402
+from backend import auth  # noqa: E402
+from tests.fake_appwrite import FakeAuth, FakeTablesDB  # noqa: E402
 
 FAKE = FakeTablesDB()
 FAKE.load_sqlite("db_tre", "Online", TMP / "uno.db3")
 appwrite_client._tables = FAKE
 
-c = TestClient(app)
+AUTH = FakeAuth()
+AUTH.add_user("maria@example.com", "password-giusta", "Maria")
+AUTH.add_user("estraneo@example.com", "password-giusta", "Estraneo", labels=())
+appwrite_client.login = AUTH.login
+appwrite_client.user_for_session = AUTH.user_for_session
+appwrite_client.logout = AUTH.logout
+
+c = TestClient(app)  # client con accesso fatto, usato dai test sui libri
+assert c.post("/api/auth/login", json={"email": "maria@example.com", "password": "password-giusta"}).status_code == 200
 SQL, AW = "/api/b/uno", "/api/b/tre"
 BOTH = pytest.mark.parametrize("B", [SQL, AW], ids=["sqlite", "appwrite"])
 
@@ -144,6 +153,78 @@ def test_appwrite_non_risponde(monkeypatch):
     monkeypatch.undo()
     reset_stores()
     assert c.get(f"{AW}/libri").status_code == 200
+
+
+@pytest.fixture
+def anon():
+    auth._fails.clear()
+    yield TestClient(app)
+    auth._fails.clear()
+
+
+def test_senza_login_niente_dati(anon):
+    assert anon.get("/api/health").status_code == 200
+    assert anon.get("/api/auth/me").status_code == 401
+    for url in ["/api/biblioteche", f"{SQL}/libri", f"{AW}/libri", f"{AW}/libri/72", f"{AW}/stats", f"{AW}/generi"]:
+        assert anon.get(url).status_code == 401, url
+    assert anon.post(f"{AW}/libri", json={"titolo": "x"}).status_code == 401
+    assert anon.delete(f"{AW}/libri/72").status_code == 401
+    assert anon.patch("/api/biblioteche/uno", json={"nome": "x"}).status_code == 401
+    # cookie inventato
+    anon.cookies.set(auth.COOKIE, "inventato")
+    assert anon.get(f"{AW}/libri").status_code == 401
+
+
+def test_login_e_logout(anon):
+    r = anon.post("/api/auth/login", json={"email": " Maria@Example.com ", "password": "password-giusta"})
+    assert r.status_code == 200 and r.json() == {"name": "Maria", "email": "maria@example.com"}
+    cookie = r.headers["set-cookie"].lower()
+    assert "httponly" in cookie and "samesite=lax" in cookie
+    assert anon.get("/api/auth/me").json()["name"] == "Maria"
+    assert anon.get(f"{AW}/stats").status_code == 200
+    assert anon.post("/api/auth/logout").status_code == 204
+    assert anon.get(f"{AW}/stats").status_code == 401
+    assert anon.post("/api/auth/logout").status_code == 204  # di nuovo: nessun errore
+
+
+def test_login_sbagliato(anon):
+    r = anon.post("/api/auth/login", json={"email": "maria@example.com", "password": "sbagliata"})
+    assert r.status_code == 401 and "password" in r.json()["detail"]
+    r = anon.post("/api/auth/login", json={"email": "nessuno@example.com", "password": "x"})
+    assert r.status_code == 401
+    # utente del progetto ma senza l'etichetta "biblioteca": non entra
+    r = anon.post("/api/auth/login", json={"email": "estraneo@example.com", "password": "password-giusta"})
+    assert r.status_code == 403
+    assert not any(u["email"] == "estraneo@example.com" for u in AUTH.sessions.values())  # sessione chiusa
+
+
+def test_errore_configurazione_non_e_password_errata(anon, monkeypatch):
+    from appwrite.exception import AppwriteException
+
+    def senza_permessi(*a):
+        raise AppwriteException("missing scopes", 401, "general_unauthorized_scope")
+
+    monkeypatch.setattr(appwrite_client, "login", senza_permessi)
+    r = anon.post("/api/auth/login", json={"email": "maria@example.com", "password": "password-giusta"})
+    assert r.status_code == 503
+    assert not any(auth._fails.values())  # non conta come tentativo sbagliato
+
+
+def test_troppi_tentativi(anon):
+    for _ in range(auth.MAX_FAILS_EMAIL):
+        assert anon.post("/api/auth/login", json={"email": "maria@example.com", "password": "no"}).status_code == 401
+    # ora anche la password giusta è bloccata per un po'
+    r = anon.post("/api/auth/login", json={"email": "maria@example.com", "password": "password-giusta"})
+    assert r.status_code == 429
+
+
+def test_sessione_revocata(anon):
+    anon.post("/api/auth/login", json={"email": "maria@example.com", "password": "password-giusta"})
+    AUTH.sessions.clear()        # es. sessione eliminata dalla console Appwrite
+    auth._sessions.clear()       # (scaduta anche la cache del backend)
+    assert anon.get(f"{AW}/stats").status_code == 401
+    # il client principale deve rientrare per i test successivi
+    assert c.post("/api/auth/login", json={"email": "maria@example.com", "password": "password-giusta"}).status_code == 200
 
 
 def test_no_wal():

@@ -75,6 +75,28 @@ Il backend tiene in memoria una copia del catalogo (pochi MB): ricerca e ordinam
 e identici alla versione SQLite. Ogni modifica è scritta subito su Appwrite; la copia si ricarica
 comunque ogni 10 minuti. La chiave API resta solo sul backend: il browser non parla mai con Appwrite.
 
+### Accesso (login)
+
+Con Appwrite configurato l'app chiede email e password. Possono entrare solo gli utenti di Appwrite
+con l'etichetta **`biblioteca`**: avere un account nel progetto non basta.
+
+- **Creare un utente** (o abilitarne uno esistente, o cambiargli la password), da un terminale:
+  ```powershell
+  .venv\Scripts\python scripts\crea_utente.py
+  ```
+  La password si scrive lì e non viene mostrata.
+- **Togliere l'accesso**: console Appwrite → Auth → utente → togliere l'etichetta `biblioteca`
+  (oppure bloccare o eliminare l'utente). Le sessioni già aperte smettono di funzionare entro 5 minuti;
+  per chiuderle subito, eliminarle dalla scheda Sessions dell'utente.
+- Il backend apre la sessione Appwrite e la conserva in un cookie `httpOnly` (180 giorni);
+  il browser non riceve mai la chiave API.
+- Dopo 10 password sbagliate per la stessa email il login si blocca per 15 minuti.
+
+La chiave API deve avere gli scopes: tutta la categoria **Database**, `users.read`, `users.write`
+e `sessions.write`.
+
+Senza Appwrite configurato (solo file `.db3` locali) il login è disattivato.
+
 ## Più biblioteche con file locali
 
 In alternativa ad Appwrite, le biblioteche si possono elencare in `biblioteche.json` nella cartella
@@ -109,6 +131,7 @@ modificare lo stesso libro contemporaneamente dai due programmi.
 ```
 biblioteche.json   elenco delle biblioteche e dei loro database (locale, non versionato)
 backend/
+  auth.py          login, logout e controllo della sessione (utenti Appwrite)
   database.py      elenco delle biblioteche (biblioteche.json, Appwrite o default) e connessioni SQL
   appwrite_client.py  collegamento ad Appwrite
   store_appwrite.py   libri su Appwrite (copia in memoria + scritture su Appwrite)
@@ -118,6 +141,7 @@ backend/
   main.py          endpoint REST
 scripts/
   migra_appwrite.py  migrazione di una biblioteca da .db3 ad Appwrite
+  crea_utente.py     crea o abilita un utente che può entrare
 frontend/
   src/api/libri.js tutte le chiamate al backend
   src/App.jsx      pagina principale (tabella, ricerca, filtri, paginazione)
@@ -142,7 +166,12 @@ tests/
 | DELETE | `/api/b/{bid}/libri/{id}` | Elimina un libro |
 | GET | `/api/b/{bid}/generi` | Generi con il numero di libri |
 | GET | `/api/b/{bid}/stats` | Totali (libri, autori, generi, libri senza genere) |
-| GET | `/api/health` | Controllo che il backend sia attivo |
+| POST | `/api/auth/login` | Accesso (`{"email", "password"}`), imposta il cookie di sessione |
+| POST | `/api/auth/logout` | Uscita |
+| GET | `/api/auth/me` | Utente collegato (`null` se il login è disattivato) |
+| GET | `/api/health` | Controllo che il backend sia attivo (unica API senza login) |
+
+Con il login attivo tutte le altre API rispondono `401` senza una sessione valida.
 
 ## Passaggio a Supabase
 

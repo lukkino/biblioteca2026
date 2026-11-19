@@ -15,6 +15,7 @@ import time
 
 from appwrite.client import Client
 from appwrite.query import Query
+from appwrite.services.account import Account
 from appwrite.services.tables_db import TablesDB
 
 ENV = ("APPWRITE_ENDPOINT", "APPWRITE_PROJECT_ID", "APPWRITE_API_KEY")
@@ -39,6 +40,34 @@ def tables() -> TablesDB:
                       .set_key(os.environ["APPWRITE_API_KEY"]))
             _tables = TablesDB(client)
         return _tables
+
+
+def _base_client() -> Client:
+    return Client().set_endpoint(os.environ["APPWRITE_ENDPOINT"]).set_project(os.environ["APPWRITE_PROJECT_ID"])
+
+
+# --- utenti -------------------------------------------------------------------------------
+# I dati restituiti sono dict semplici: {"id", "name", "email", "labels"}.
+
+def _user_dict(u) -> dict:
+    return {"id": u.id, "name": u.name, "email": u.email, "labels": list(u.labels or [])}
+
+
+def login(email: str, password: str) -> tuple[str, dict]:
+    """Crea una sessione Appwrite; restituisce (secret della sessione, utente)."""
+    # con la API key Appwrite restituisce anche il "secret" della sessione
+    keyed = Account(_base_client().set_key(os.environ["APPWRITE_API_KEY"]))
+    session = keyed.create_email_password_session(email, password)
+    return session.secret, user_for_session(session.secret)
+
+
+def user_for_session(secret: str) -> dict:
+    """Utente della sessione (errore 401 di Appwrite se la sessione non è valida o è scaduta)."""
+    return _user_dict(Account(_base_client().set_session(secret)).get())
+
+
+def logout(secret: str) -> None:
+    Account(_base_client().set_session(secret)).delete_session("current")
 
 
 def list_databases() -> list[tuple[str, str]]:

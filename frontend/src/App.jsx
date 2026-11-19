@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import {
   ArrowDown, ArrowUp, ArrowUpDown, BookOpen, ChevronLeft, ChevronRight, DatabaseZap, Loader2,
-  Moon, Pencil, Plus, Search, Sun, Trash2, X,
+  LogOut, Moon, Pencil, Plus, Search, Sun, Trash2, X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ui/dialog"
 import BookFormDialog, { selectCls } from "@/components/BookFormDialog"
 import BibliotecaSelector from "@/components/BibliotecaSelector"
 import { deleteLibro, errorMessage, getBiblioteche, getGeneri, getLibri, getStats } from "@/api/libri"
+import { useAuth } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 
 const PAGE_SIZES = [25, 50, 100]
@@ -53,6 +54,7 @@ function readSavedBiblioteca() {
 
 export default function App() {
   const [dark, setDark] = useDarkMode()
+  const { user, logout } = useAuth()
 
   // biblioteche (es. Casa / Parrocchia): ognuna ha il suo DB
   const [biblioteche, setBiblioteche] = useState(null) // null = in caricamento
@@ -222,6 +224,12 @@ export default function App() {
           <Button className="h-9 px-3" disabled={!canLoad} onClick={() => setEditing({ libro: null })}>
             <Plus /> <span className="hidden sm:inline">Nuovo libro</span>
           </Button>
+          {user && (
+            <Button variant="ghost" size="icon" onClick={logout}
+              aria-label={`Esci (${user.name})`} title={`${user.name} – Esci`}>
+              <LogOut />
+            </Button>
+          )}
         </div>
       </header>
 

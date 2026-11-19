@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
+from backend import auth
+from backend.auth import require_user
 from backend.database import (
     Biblioteca, check_disponibile, get_biblioteca, get_session, load_biblioteche, rename_biblioteca,
 )
@@ -23,9 +25,10 @@ from backend.store_sql import SqlStore
 
 log = logging.getLogger("biblioteca")
 
-app = FastAPI(title="Biblioteca API", version="0.3.0")
+app = FastAPI(title="Biblioteca API", version="0.4.0")
 # tutte le API dei libri sono per una biblioteca: /api/b/{bid}/libri, /api/b/{bid}/generi, ...
-router = APIRouter(prefix="/api/b/{bid}")
+# e richiedono il login (se Appwrite è configurato)
+router = APIRouter(prefix="/api/b/{bid}", dependencies=[Depends(require_user)])
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,7 +71,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/api/biblioteche", response_model=list[BibliotecaOut])
+@app.get("/api/biblioteche", response_model=list[BibliotecaOut], dependencies=[Depends(require_user)])
 def list_biblioteche():
     out = []
     for b in load_biblioteche():
@@ -85,7 +88,7 @@ def list_biblioteche():
     return out
 
 
-@app.patch("/api/biblioteche/{bid}", response_model=BibliotecaOut)
+@app.patch("/api/biblioteche/{bid}", response_model=BibliotecaOut, dependencies=[Depends(require_user)])
 def patch_biblioteca(bid: str, data: BibliotecaRename):
     items = load_biblioteche()
     b = next((x for x in items if x.id == bid), None)
@@ -149,3 +152,4 @@ def delete_libro(libro_id: int, store=Depends(get_store)):
 
 
 app.include_router(router)
+app.include_router(auth.router)
