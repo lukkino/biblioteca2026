@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Segreti / configurazione locale
+.env
+
+# Database locali (dati personali, non pubblicati)
+*.db3
+*.db3-shm
+*.db3-wal
+*.db
+*.sqlite
+
+# Frontend
+node_modules/
+dist/
+
+# IDE / OS
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
