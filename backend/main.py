@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Literal
 
 import requests
 from appwrite.exception import AppwriteException
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend import auth
@@ -153,3 +155,23 @@ def delete_libro(libro_id: int, store=Depends(get_store)):
 
 app.include_router(router)
 app.include_router(auth.router)
+
+
+# --- sito (frontend compilato) --------------------------------------------------------------
+# In produzione (Render) lo stesso server serve anche il frontend: stesso indirizzo per sito e
+# API, così il cookie di accesso funziona senza configurazioni CORS. In sviluppo il frontend
+# gira con Vite (porta 5173) e questa parte resta inattiva finché non esiste frontend/dist.
+DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+if (DIST / "index.html").is_file():
+    app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def frontend(path: str):
+        if path == "api" or path.startswith("api/"):
+            raise HTTPException(404, "Not Found")
+        file = (DIST / path).resolve()
+        if path and file.is_file() and DIST in file.parents:
+            return FileResponse(file)  # es. favicon
+        # index.html mai in cache: dopo un aggiornamento il browser prende subito la versione nuova
+        return FileResponse(DIST / "index.html", headers={"Cache-Control": "no-cache"})

@@ -1,0 +1,19 @@
+# Blueprint di Render: un solo servizio web (sito + API) costruito dal Dockerfile.
+# Render → New → Blueprint → scegliere questo repository.
+services:
+  - type: web
+    name: biblioteca
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: APPWRITE_ENDPOINT
+        value: https://fra.cloud.appwrite.io/v1
+      - key: APPWRITE_PROJECT_ID
+        value: 6aff40760006c4b4b2c4
+      - key: APPWRITE_API_KEY
+        sync: false   # segreta: Render la chiede alla creazione, non sta nel repository

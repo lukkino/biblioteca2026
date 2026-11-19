@@ -1,0 +1,19 @@
+# niente segreti né dati locali nell'immagine
+.env
+biblioteche.json
+biblioteche.sqlite.json
+biblioteche.tmp
+*.db3
+*.db3-shm
+*.db3-wal
+*.db
+*.sqlite
+
+.git
+.venv
+.pytest_cache
+**/__pycache__
+frontend/node_modules
+frontend/dist
+.idea
+.vscode

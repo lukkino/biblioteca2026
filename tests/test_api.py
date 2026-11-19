@@ -227,6 +227,18 @@ def test_sessione_revocata(anon):
     assert c.post("/api/auth/login", json={"email": "maria@example.com", "password": "password-giusta"}).status_code == 200
 
 
+@pytest.mark.skipif(not (ROOT / "frontend" / "dist" / "index.html").is_file(), reason="frontend non compilato")
+def test_sito_servito_dal_backend(anon):
+    r = anon.get("/")
+    assert r.status_code == 200 and '<div id="root">' in r.text and r.headers["cache-control"] == "no-cache"
+    assert anon.get("/qualsiasi/pagina").text == r.text            # le pagine dell'app tornano index.html
+    asset = next((ROOT / "frontend" / "dist" / "assets").glob("*.js")).name
+    assert anon.get(f"/assets/{asset}").status_code == 200
+    assert anon.get("/api/inesistente").status_code == 404          # le API sbagliate restano 404
+    assert anon.get("/../.env").status_code in (200, 404) and "APPWRITE" not in anon.get("/../.env").text
+    assert anon.get("/%2e%2e/%2e%2e/.env").text == r.text           # niente file fuori da dist
+
+
 def test_no_wal():
     # il vecchio programma richiede il journal classico: l'app non deve attivare WAL
     c.get(f"{SQL}/libri")

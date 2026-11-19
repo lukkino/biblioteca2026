@@ -16,12 +16,14 @@ export default function BibliotecaSelector({ biblioteche, value, onChange, onRen
 
   return (
     <div className="flex min-w-0 items-center gap-1">
+      {/* il nome è un testo normale (si accorcia con "…" solo se manca spazio); sopra c'è la
+          tendina nativa trasparente, così su telefono si apre il selettore del sistema */}
       <div className="relative min-w-0">
         <select
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}
           aria-label="Biblioteca"
-          className="max-w-full cursor-pointer appearance-none truncate rounded-md bg-transparent py-0.5 pl-1 pr-6 -ml-1 text-lg font-semibold leading-tight outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="peer absolute inset-0 z-10 w-full cursor-pointer appearance-none opacity-0"
         >
           {biblioteche.map((b) => (
             <option key={b.id} value={b.id}>
@@ -29,6 +31,10 @@ export default function BibliotecaSelector({ biblioteche, value, onChange, onRen
             </option>
           ))}
         </select>
+        <span aria-hidden="true"
+          className="-ml-1 block truncate rounded-md py-0.5 pl-1 pr-6 text-lg font-semibold leading-tight peer-hover:bg-muted peer-focus-visible:ring-2 peer-focus-visible:ring-ring/50">
+          {current?.nome ?? "Biblioteca"}
+        </span>
         <ChevronDown className="pointer-events-none absolute right-1 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       </div>
       {current && (

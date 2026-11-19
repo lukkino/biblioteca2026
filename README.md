@@ -97,6 +97,25 @@ e `sessions.write`.
 
 Senza Appwrite configurato (solo file `.db3` locali) il login è disattivato.
 
+## Pubblicazione su Render
+
+L'app online è **un solo servizio web**: il `Dockerfile` compila il frontend e FastAPI serve sia il
+sito sia le API dallo stesso indirizzo (così il cookie di accesso funziona senza configurazioni CORS).
+La configurazione è in `render.yaml`.
+
+1. Su [render.com](https://render.com) → **New → Blueprint** → collegare GitHub e scegliere questo repository.
+2. Render legge `render.yaml` e chiede il valore di **`APPWRITE_API_KEY`** (la stessa chiave del file `.env`).
+3. **Deploy**. A ogni push su `main` Render ripubblica da solo.
+
+Con il piano gratuito il servizio si sospende dopo 15 minuti senza visite: la prima apertura
+successiva richiede circa un minuto.
+
+Per provare in locale la versione "di produzione" (un solo server sulla porta 8000):
+```powershell
+cd frontend; npm run build; cd ..
+.venv\Scripts\uvicorn backend.main:app --port 8000
+```
+
 ## Più biblioteche con file locali
 
 In alternativa ad Appwrite, le biblioteche si possono elencare in `biblioteche.json` nella cartella
