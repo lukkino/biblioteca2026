@@ -6,6 +6,8 @@ __pycache__/
 
 # Segreti / configurazione locale
 .env
+biblioteche.json
+biblioteche.tmp
 
 # Database locali (dati personali, non pubblicati)
 *.db3

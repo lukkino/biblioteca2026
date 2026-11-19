@@ -65,6 +65,23 @@ class LibriPage(BaseModel):
     page_size: int
 
 
+class BibliotecaOut(BaseModel):
+    id: str
+    nome: str
+    disponibile: bool
+    sorgente: str          # nome del file (mai l'URL completo con password)
+    totale_libri: int | None = None
+
+
+class BibliotecaRename(BaseModel):
+    nome: str = Field(min_length=1, max_length=60)
+
+    @field_validator("nome", mode="before")
+    @classmethod
+    def _strip(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+
 class Stats(BaseModel):
     totale_libri: int
     totale_autori: int

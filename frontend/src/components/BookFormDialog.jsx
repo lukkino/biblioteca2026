@@ -38,7 +38,7 @@ export const selectCls =
  * Form inserimento / modifica. `libro` null = nuovo libro.
  * Il componente va montato con una `key` diversa per ogni libro così lo stato si resetta.
  */
-export default function BookFormDialog({ open, onOpenChange, libro, generi, onSaved, onDelete }) {
+export default function BookFormDialog({ bid, open, onOpenChange, libro, generi, onSaved, onDelete }) {
   const [form, setForm] = useState(() => toForm(libro))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -56,7 +56,7 @@ export default function BookFormDialog({ open, onOpenChange, libro, generi, onSa
     setError("")
     try {
       const payload = toPayload(form)
-      const saved = isEdit ? await updateLibro(libro.id, payload) : await createLibro(payload)
+      const saved = isEdit ? await updateLibro(bid, libro.id, payload) : await createLibro(bid, payload)
       onSaved(saved, isEdit)
     } catch (err) {
       setError(errorMessage(err))

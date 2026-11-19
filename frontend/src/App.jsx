@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import {
-  ArrowDown, ArrowUp, ArrowUpDown, BookOpen, ChevronLeft, ChevronRight, Loader2,
+  ArrowDown, ArrowUp, ArrowUpDown, BookOpen, ChevronLeft, ChevronRight, DatabaseZap, Loader2,
   Moon, Pencil, Plus, Search, Sun, Trash2, X,
 } from "lucide-react"
 
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ConfirmDialog } from "@/components/ui/dialog"
 import BookFormDialog, { selectCls } from "@/components/BookFormDialog"
-import { deleteLibro, errorMessage, getGeneri, getLibri, getStats } from "@/api/libri"
+import BibliotecaSelector from "@/components/BibliotecaSelector"
+import { deleteLibro, errorMessage, getBiblioteche, getGeneri, getLibri, getStats } from "@/api/libri"
 import { cn } from "@/lib/utils"
 
 const PAGE_SIZES = [25, 50, 100]
@@ -46,8 +47,29 @@ function useDarkMode() {
   return [dark, setDark]
 }
 
+function readSavedBiblioteca() {
+  try { return localStorage.getItem("biblioteca") } catch { return null }
+}
+
 export default function App() {
   const [dark, setDark] = useDarkMode()
+
+  // biblioteche (es. Casa / Parrocchia): ognuna ha il suo DB
+  const [biblioteche, setBiblioteche] = useState(null) // null = in caricamento
+  const [bibliotecheError, setBibliotecheError] = useState("")
+  const [savedBid, setSavedBid] = useState(readSavedBiblioteca)
+  const current = biblioteche
+    ? biblioteche.find((b) => b.id === savedBid) ?? biblioteche.find((b) => b.disponibile) ?? biblioteche[0]
+    : null
+  const bid = current?.id
+  const canLoad = Boolean(current?.disponibile)
+
+  const reloadBiblioteche = useCallback(() => {
+    getBiblioteche()
+      .then((l) => { setBiblioteche(l); setBibliotecheError("") })
+      .catch((e) => setBibliotecheError(errorMessage(e)))
+  }, [])
+  useEffect(() => { reloadBiblioteche() }, [reloadBiblioteche])
 
   // filtri
   const [search, setSearch] = useState("")
@@ -70,15 +92,37 @@ export default function App() {
   const [deleting, setDeleting] = useState(false)
   const [toast, setToast] = useState("")
 
+  // generi e statistiche della biblioteca corrente; metaKey++ per ricaricarli
+  const [metaKey, setMetaKey] = useState(0)
   const refreshMeta = useCallback(() => {
-    getGeneri().then(setGeneri).catch(() => {})
-    getStats().then(setStats).catch(() => {})
-  }, [])
+    setMetaKey((k) => k + 1)
+    reloadBiblioteche() // aggiorna anche il numero di libri nel selettore
+  }, [reloadBiblioteche])
 
-  useEffect(() => { refreshMeta() }, [refreshMeta])
+  useEffect(() => {
+    if (!canLoad) return
+    let cancelled = false
+    getGeneri(bid).then((g) => { if (!cancelled) setGeneri(g) }).catch(() => {})
+    getStats(bid).then((s) => { if (!cancelled) setStats(s) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [bid, canLoad, metaKey])
 
-  // reset pagina quando cambiano i filtri (aggiustamento durante il render)
-  const filterKey = `${q}|${genereId}|${pageSize}`
+  function changeBiblioteca(id) {
+    if (id === bid) return
+    try { localStorage.setItem("biblioteca", id) } catch { /* ignore */ }
+    setSavedBid(id)
+    // i generi sono diversi in ogni DB: azzero filtro e dati della biblioteca precedente
+    setGenereId("")
+    setData({ items: [], total: 0 })
+    setGeneri([])
+    setStats(null)
+    setError("")
+    setEditing(null)
+    setToDelete(null)
+  }
+
+  // reset pagina quando cambiano i filtri o la biblioteca (aggiustamento durante il render)
+  const filterKey = `${bid}|${q}|${genereId}|${pageSize}`
   const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
   if (filterKey !== prevFilterKey) {
     setPrevFilterKey(filterKey)
@@ -86,13 +130,14 @@ export default function App() {
   }
 
   // "loading" = la richiesta corrente non è ancora conclusa
-  const requestKey = JSON.stringify([q, genereId, sort, page, pageSize, reloadKey])
+  const requestKey = JSON.stringify([bid, q, genereId, sort, page, pageSize, reloadKey])
   const [doneKey, setDoneKey] = useState(null)
-  const loading = doneKey !== requestKey
+  const loading = canLoad && doneKey !== requestKey
 
   useEffect(() => {
+    if (!canLoad) return
     let cancelled = false
-    getLibri({
+    getLibri(bid, {
       q: q || undefined,
       genere_id: genereId === "" ? undefined : genereId,
       sort: sort.key,
@@ -104,7 +149,7 @@ export default function App() {
       .catch((e) => { if (!cancelled) setError(errorMessage(e)) })
       .finally(() => { if (!cancelled) setDoneKey(requestKey) })
     return () => { cancelled = true }
-  }, [q, genereId, sort, page, pageSize, reloadKey, requestKey])
+  }, [bid, canLoad, q, genereId, sort, page, pageSize, reloadKey, requestKey])
 
   useEffect(() => {
     if (!toast) return
@@ -131,7 +176,7 @@ export default function App() {
   async function confirmDelete() {
     setDeleting(true)
     try {
-      await deleteLibro(toDelete.id)
+      await deleteLibro(bid, toDelete.id)
       setToast(`“${toDelete.titolo}” eliminato`)
       setToDelete(null)
       setEditing(null)
@@ -154,8 +199,18 @@ export default function App() {
             <BookOpen className="size-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-semibold leading-tight">Biblioteca</h1>
-            {stats && (
+            <h1 className="sr-only">Biblioteca{current ? ` – ${current.nome}` : ""}</h1>
+            {biblioteche ? (
+              <BibliotecaSelector
+                biblioteche={biblioteche}
+                value={bid}
+                onChange={changeBiblioteca}
+                onRenamed={(b) => { setToast(`Biblioteca rinominata in “${b.nome}”`); reloadBiblioteche() }}
+              />
+            ) : (
+              <p className="text-lg font-semibold leading-tight">Biblioteca</p>
+            )}
+            {canLoad && stats && (
               <p className="truncate text-xs text-muted-foreground">
                 {stats.totale_libri.toLocaleString("it-IT")} libri · {stats.totale_autori.toLocaleString("it-IT")} autori · {stats.totale_generi} generi
               </p>
@@ -164,13 +219,40 @@ export default function App() {
           <Button variant="ghost" size="icon" onClick={() => setDark(!dark)} aria-label="Cambia tema">
             {dark ? <Sun /> : <Moon />}
           </Button>
-          <Button className="h-9 px-3" onClick={() => setEditing({ libro: null })}>
+          <Button className="h-9 px-3" disabled={!canLoad} onClick={() => setEditing({ libro: null })}>
             <Plus /> <span className="hidden sm:inline">Nuovo libro</span>
           </Button>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-5">
+        {bibliotecheError && (
+          <div role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            Impossibile caricare le biblioteche: {bibliotecheError}. Il backend è avviato sulla porta 8000?
+          </div>
+        )}
+
+        {current && !canLoad && (
+          <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-6 py-16 text-center">
+            <DatabaseZap className="size-10 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">Il database di “{current.nome}” non è ancora disponibile</h2>
+            <p className="max-w-md break-all text-sm text-muted-foreground">
+              {/[\\/:]/.test(current.sorgente) ? "Il file " : "Copia il file "}
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">{current.sorgente}</code>
+              {/[\\/:]/.test(current.sorgente)
+                ? " non è stato trovato. Controlla il percorso in biblioteche.json e ricarica la pagina."
+                : " nella cartella del progetto (accanto a Biblioteca.db3) e ricarica la pagina."}
+            </p>
+            {biblioteche.some((b) => b.disponibile && b.id !== current.id) && (
+              <Button variant="outline" className="mt-2 h-9"
+                onClick={() => changeBiblioteca(biblioteche.find((b) => b.disponibile && b.id !== current.id).id)}>
+                Vai a “{biblioteche.find((b) => b.disponibile && b.id !== current.id).nome}”
+              </Button>
+            )}
+          </div>
+        )}
+
+        {canLoad && (<>
         {/* Toolbar ricerca */}
         <div className="mb-4 flex flex-col gap-2 sm:flex-row">
           <div className="relative flex-1">
@@ -323,11 +405,13 @@ export default function App() {
             </Button>
           </div>
         </div>
+        </>)}
       </main>
 
       {editing && (
         <BookFormDialog
-          key={editing.libro?.id ?? "new"}
+          key={`${bid}-${editing.libro?.id ?? "new"}`}
+          bid={bid}
           open
           onOpenChange={(o) => { if (!o) setEditing(null) }}
           libro={editing.libro}

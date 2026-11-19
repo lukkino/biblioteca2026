@@ -4,16 +4,21 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
+from backend.database import get_db, get_session, load_biblioteche, save_biblioteche
 from backend.models import Genere, Libro
-from backend.schemas import GenereOut, LibriPage, LibroCreate, LibroOut, LibroUpdate, Stats
+from backend.schemas import (
+    BibliotecaOut, BibliotecaRename, GenereOut, LibriPage, LibroCreate, LibroOut, LibroUpdate, Stats,
+)
 
-app = FastAPI(title="Biblioteca API", version="0.1.0")
+app = FastAPI(title="Biblioteca API", version="0.2.0")
+# tutte le API dei libri sono per una biblioteca: /api/b/{bid}/libri, /api/b/{bid}/generi, ...
+router = APIRouter(prefix="/api/b/{bid}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,7 +64,38 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/api/generi", response_model=list[GenereOut])
+@app.get("/api/biblioteche", response_model=list[BibliotecaOut])
+def list_biblioteche():
+    out = []
+    for b in load_biblioteche():
+        totale = None
+        disponibile = b.disponibile
+        if disponibile:
+            try:
+                with get_session(b) as db:
+                    totale = db.scalar(select(func.count(Libro.id))) or 0
+            except SQLAlchemyError:
+                disponibile = False  # file presente ma non leggibile / non e' un DB biblioteca
+        out.append(BibliotecaOut(
+            id=b.id, nome=b.nome, disponibile=disponibile, sorgente=b.descrizione_sorgente, totale_libri=totale,
+        ))
+    return out
+
+
+@app.patch("/api/biblioteche/{bid}", response_model=BibliotecaOut)
+def rename_biblioteca(bid: str, data: BibliotecaRename):
+    items = load_biblioteche()
+    b = next((x for x in items if x.id == bid), None)
+    if b is None:
+        raise HTTPException(404, f"Biblioteca '{bid}' non configurata")
+    if any(x.nome.casefold() == data.nome.casefold() for x in items if x.id != bid):
+        raise HTTPException(422, "Esiste già una biblioteca con questo nome")
+    b.nome = data.nome
+    save_biblioteche(items)
+    return next(x for x in list_biblioteche() if x.id == bid)
+
+
+@router.get("/generi", response_model=list[GenereOut])
 def list_generi(db: Session = Depends(get_db)):
     rows = db.execute(
         select(Genere, func.count(Libro.id))
@@ -70,7 +106,7 @@ def list_generi(db: Session = Depends(get_db)):
     return [GenereOut(id=g.id, descrizione=g.descrizione, totale=n) for g, n in rows]
 
 
-@app.get("/api/stats", response_model=Stats)
+@router.get("/stats", response_model=Stats)
 def stats(db: Session = Depends(get_db)):
     return Stats(
         totale_libri=db.scalar(select(func.count(Libro.id))) or 0,
@@ -84,7 +120,7 @@ def stats(db: Session = Depends(get_db)):
     )
 
 
-@app.get("/api/libri", response_model=LibriPage)
+@router.get("/libri", response_model=LibriPage)
 def list_libri(
     q: str | None = Query(None, description="Ricerca libera su titolo, autore, editore, codice, collocazione, premi, note"),
     autore: str | None = None,
@@ -131,7 +167,7 @@ def list_libri(
     return LibriPage(items=[_to_out(x) for x in libri], total=total, page=page, page_size=page_size)
 
 
-@app.get("/api/libri/{libro_id}", response_model=LibroOut)
+@router.get("/libri/{libro_id}", response_model=LibroOut)
 def get_libro(libro_id: int, db: Session = Depends(get_db)):
     libro = db.get(Libro, libro_id)
     if not libro:
@@ -139,7 +175,7 @@ def get_libro(libro_id: int, db: Session = Depends(get_db)):
     return _to_out(libro)
 
 
-@app.post("/api/libri", response_model=LibroOut, status_code=201)
+@router.post("/libri", response_model=LibroOut, status_code=201)
 def create_libro(data: LibroCreate, db: Session = Depends(get_db)):
     _check_genere(db, data.genere_id)
     libro = Libro(**data.model_dump())
@@ -149,7 +185,7 @@ def create_libro(data: LibroCreate, db: Session = Depends(get_db)):
     return _to_out(libro)
 
 
-@app.put("/api/libri/{libro_id}", response_model=LibroOut)
+@router.put("/libri/{libro_id}", response_model=LibroOut)
 def update_libro(libro_id: int, data: LibroUpdate, db: Session = Depends(get_db)):
     libro = db.get(Libro, libro_id)
     if not libro:
@@ -162,7 +198,7 @@ def update_libro(libro_id: int, data: LibroUpdate, db: Session = Depends(get_db)
     return _to_out(libro)
 
 
-@app.delete("/api/libri/{libro_id}", status_code=204)
+@router.delete("/libri/{libro_id}", status_code=204)
 def delete_libro(libro_id: int, db: Session = Depends(get_db)):
     libro = db.get(Libro, libro_id)
     if not libro:
@@ -170,3 +206,6 @@ def delete_libro(libro_id: int, db: Session = Depends(get_db)):
     db.delete(libro)
     db.commit()
     return Response(status_code=204)
+
+
+app.include_router(router)

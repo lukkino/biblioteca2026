@@ -1,0 +1,17 @@
+[
+  {
+    "id": "biblioteca1",
+    "nome": "Casa",
+    "file": "Biblioteca.db3"
+  },
+  {
+    "id": "biblioteca2",
+    "nome": "Parrocchia",
+    "file": "Parrocchia.db3"
+  },
+  {
+    "id": "esempio-supabase",
+    "nome": "Esempio Supabase",
+    "url": "${DATABASE_URL_ESEMPIO}"
+  }
+]
