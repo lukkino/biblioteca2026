@@ -33,6 +33,7 @@ AUTH.add_user("estraneo@example.com", "password-giusta", "Estraneo", labels=())
 appwrite_client.login = AUTH.login
 appwrite_client.user_for_session = AUTH.user_for_session
 appwrite_client.logout = AUTH.logout
+appwrite_client.update_prefs = AUTH.update_prefs
 
 c = TestClient(app)  # client con accesso fatto, usato dai test sui libri
 assert c.post("/api/auth/login", json={"email": "maria@example.com", "password": "password-giusta"}).status_code == 200
@@ -177,7 +178,8 @@ def test_senza_login_niente_dati(anon):
 
 def test_login_e_logout(anon):
     r = anon.post("/api/auth/login", json={"email": " Maria@Example.com ", "password": "password-giusta"})
-    assert r.status_code == 200 and r.json() == {"name": "Maria", "email": "maria@example.com"}
+    assert r.status_code == 200
+    assert {k: r.json()[k] for k in ("name", "email")} == {"name": "Maria", "email": "maria@example.com"}
     cookie = r.headers["set-cookie"].lower()
     assert "httponly" in cookie and "samesite=lax" in cookie
     assert anon.get("/api/auth/me").json()["name"] == "Maria"
@@ -237,6 +239,24 @@ def test_sito_servito_dal_backend(anon):
     assert anon.get("/api/inesistente").status_code == 404          # le API sbagliate restano 404
     assert anon.get("/../.env").status_code in (200, 404) and "APPWRITE" not in anon.get("/../.env").text
     assert anon.get("/%2e%2e/%2e%2e/.env").text == r.text           # niente file fuori da dist
+
+
+def test_versione():
+    pkg = json.loads((ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))
+    assert c.get("/api/health").json() == {"status": "ok", "version": pkg["version"]}
+
+
+def test_versione_vista(anon):
+    me = c.get("/api/auth/me").json()
+    assert me["created_at"].startswith("2026-11-19")
+    AUTH.users["maria@example.com"][1]["prefs"]["altra"] = "resta"  # le altre preferenze non si perdono
+    auth._sessions.clear()
+    r = c.post("/api/auth/versione-vista", json={"version": "1.0.0"})
+    assert r.status_code == 200 and r.json()["last_seen_version"] == "1.0.0"
+    assert c.get("/api/auth/me").json()["last_seen_version"] == "1.0.0"  # anche dalla cache del backend
+    assert AUTH.users["maria@example.com"][1]["prefs"] == {"altra": "resta", "last_seen_version": "1.0.0"}
+    assert c.post("/api/auth/versione-vista", json={"version": "pippo"}).status_code == 422
+    assert anon.post("/api/auth/versione-vista", json={"version": "1.0.0"}).status_code == 401
 
 
 def test_no_wal():

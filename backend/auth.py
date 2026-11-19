@@ -48,6 +48,17 @@ class LoginIn(BaseModel):
 class UserOut(BaseModel):
     name: str
     email: str
+    created_at: str | None = None
+    last_seen_version: str | None = None   # ultima versione di cui ha visto le novità
+
+    @classmethod
+    def of(cls, user: dict) -> "UserOut":
+        return cls(name=user["name"] or user["email"], email=user["email"], created_at=user.get("created_at"),
+                   last_seen_version=(user.get("prefs") or {}).get("last_seen_version"))
+
+
+class VersioneVistaIn(BaseModel):
+    version: str = Field(pattern=r"^\d+\.\d+\.\d+$")
 
 
 def enabled() -> bool:
@@ -128,7 +139,22 @@ def _set_cookie(response: Response, request: Request, secret: str) -> None:
 def me(request: Request):
     """Utente collegato; null se il login è disattivato (solo file locali)."""
     user = require_user(request)
-    return UserOut(name=user["name"] or user["email"], email=user["email"]) if user else None
+    return UserOut.of(user) if user else None
+
+
+@router.post("/versione-vista", response_model=UserOut)
+def versione_vista(data: VersioneVistaIn, request: Request):
+    """Segna che l'utente ha visto le novità fino a questa versione (popup "Novità")."""
+    current = require_user(request)
+    if current is None:
+        raise HTTPException(400, "Login non attivo")
+    secret = request.cookies[COOKIE]
+    # una sola chiamata ad Appwrite: le altre preferenze sono già note dalla sessione
+    prefs = {**(current.get("prefs") or {}), "last_seen_version": data.version}
+    user = appwrite_client.update_prefs(secret, prefs)
+    with _lock:
+        _sessions[_h(secret)] = (time.monotonic() + SESSION_CACHE_TTL, user)
+    return UserOut.of(user)
 
 
 @router.post("/login", response_model=UserOut)
@@ -159,7 +185,7 @@ def login(data: LoginIn, request: Request, response: Response):
     with _lock:
         _sessions[_h(secret)] = (time.monotonic() + SESSION_CACHE_TTL, user)
     _set_cookie(response, request, secret)
-    return UserOut(name=user["name"] or user["email"], email=user["email"])
+    return UserOut.of(user)
 
 
 @router.post("/logout", status_code=204)

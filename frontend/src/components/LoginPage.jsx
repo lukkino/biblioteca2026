@@ -71,6 +71,7 @@ export default function LoginPage({ notice, onLogin }) {
             {busy && <Loader2 className="animate-spin" />} Entra
           </Button>
         </form>
+        <p className="mt-4 text-center text-xs text-muted-foreground">v{__APP_VERSION__}</p>
       </div>
     </main>
   )

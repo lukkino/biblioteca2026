@@ -16,6 +16,7 @@ WORKDIR /app
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ backend/
+COPY frontend/package.json frontend/package.json
 COPY --from=frontend /app/frontend/dist frontend/dist
 
 RUN useradd --create-home app

@@ -15,7 +15,13 @@ class FakeAuth:
         self._n = 0
 
     def add_user(self, email, password, name, labels=("biblioteca",)):
-        self.users[email] = (password, {"id": email, "name": name, "email": email, "labels": list(labels)})
+        self.users[email] = (password, {"id": email, "name": name, "email": email, "labels": list(labels),
+                                        "created_at": "2026-11-19T10:00:00.000+00:00", "prefs": {}})
+
+    def update_prefs(self, secret, prefs):
+        user = self.user_for_session(secret)
+        user["prefs"] = dict(prefs)
+        return user
 
     def login(self, email, password):
         pw, user = self.users.get(email, (None, None))

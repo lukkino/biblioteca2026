@@ -47,10 +47,12 @@ def _base_client() -> Client:
 
 
 # --- utenti -------------------------------------------------------------------------------
-# I dati restituiti sono dict semplici: {"id", "name", "email", "labels"}.
+# I dati restituiti sono dict semplici: {"id", "name", "email", "labels", "created_at", "prefs"}.
 
 def _user_dict(u) -> dict:
-    return {"id": u.id, "name": u.name, "email": u.email, "labels": list(u.labels or [])}
+    prefs = getattr(u.prefs, "data", None) or {}
+    return {"id": u.id, "name": u.name, "email": u.email, "labels": list(u.labels or []),
+            "created_at": u.createdat, "prefs": dict(prefs)}
 
 
 def login(email: str, password: str) -> tuple[str, dict]:
@@ -68,6 +70,11 @@ def user_for_session(secret: str) -> dict:
 
 def logout(secret: str) -> None:
     Account(_base_client().set_session(secret)).delete_session("current")
+
+
+def update_prefs(secret: str, prefs: dict) -> dict:
+    """Sostituisce tutte le preferenze dell'utente della sessione; restituisce l'utente aggiornato."""
+    return _user_dict(Account(_base_client().set_session(secret)).update_prefs(prefs))
 
 
 def list_databases() -> list[tuple[str, str]]:

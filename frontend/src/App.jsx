@@ -9,6 +9,10 @@ import { Input } from "@/components/ui/input"
 import { ConfirmDialog } from "@/components/ui/dialog"
 import BookFormDialog, { selectCls } from "@/components/BookFormDialog"
 import BibliotecaSelector from "@/components/BibliotecaSelector"
+import ReleasesDialog from "@/components/ReleasesDialog"
+import WhatsNewDialog from "@/components/WhatsNewDialog"
+import { RELEASES } from "@/data/releases"
+import { formatData, pendingReleases } from "@/lib/versions"
 import { deleteLibro, errorMessage, getBiblioteche, getGeneri, getLibri, getStats } from "@/api/libri"
 import { useAuth } from "@/lib/auth"
 import { cn } from "@/lib/utils"
@@ -48,13 +52,38 @@ function useDarkMode() {
   return [dark, setDark]
 }
 
+// Popup "Novità" una volta per versione: si basa sull'ultima versione vista dall'utente
+// (preferenze su Appwrite, quindi vale su tutti i dispositivi).
+// La versione è segnata come vista appena il popup compare (non alla chiusura): così il
+// popup esce davvero una volta sola, anche se si chiude la scheda senza toccarlo.
+function useWhatsNew(user, markVersionSeen) {
+  const current = __APP_VERSION__
+  const { entries, markSilently } = user
+    ? pendingReleases({ releases: RELEASES, current, lastSeen: user.last_seen_version, createdAt: user.created_at })
+    : { entries: [], markSilently: false }
+
+  // voci mostrate nel popup, fissate alla prima comparsa (dopo il salvataggio "entries" si svuota)
+  const [shown, setShown] = useState(null)
+  if (shown === null && entries.length > 0) setShown(entries)
+
+  const toMark = markSilently || (shown?.length ?? 0) > 0
+  useEffect(() => {
+    if (toMark) markVersionSeen(current)
+  }, [toMark, markVersionSeen, current])
+
+  const close = useCallback(() => setShown([]), [])
+  return { entries: shown ?? [], close }
+}
+
 function readSavedBiblioteca() {
   try { return localStorage.getItem("biblioteca") } catch { return null }
 }
 
 export default function App() {
   const [dark, setDark] = useDarkMode()
-  const { user, logout } = useAuth()
+  const { user, logout, markVersionSeen } = useAuth()
+  const whatsNew = useWhatsNew(user, markVersionSeen)
+  const [showReleases, setShowReleases] = useState(false)
 
   // biblioteche (es. Casa / Parrocchia): ognuna ha il suo DB
   const [biblioteche, setBiblioteche] = useState(null) // null = in caricamento
@@ -421,6 +450,21 @@ export default function App() {
         </div>
         </>)}
       </main>
+
+      <footer className="mx-auto max-w-7xl px-4 pb-6 text-center text-xs text-muted-foreground">
+        <button onClick={() => setShowReleases(true)} className="rounded hover:text-foreground hover:underline">
+          Biblioteca v{__APP_VERSION__} · aggiornata il {formatData(__APP_LAST_UPDATE__)}
+        </button>
+      </footer>
+
+      <ReleasesDialog open={showReleases} onOpenChange={setShowReleases} />
+      {whatsNew.entries.length > 0 && !showReleases && (
+        <WhatsNewDialog
+          entries={whatsNew.entries}
+          onClose={whatsNew.close}
+          onDetails={() => { whatsNew.close(); setShowReleases(true) }}
+        />
+      )}
 
       {editing && (
         <BookFormDialog

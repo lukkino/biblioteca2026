@@ -208,6 +208,26 @@ Con il login attivo tutte le altre API rispondono `401` senza una sessione valid
 
 Il file `.env` è escluso dal repository: non va mai pubblicato.
 
+## Versioni e novità
+
+La versione dell'app ha un'unica fonte: `"version"` in `frontend/package.json` (attuale: **1.0.0**).
+Si vede sotto la pagina e nella pagina di accesso; il backend la restituisce in `/api/health`.
+
+- **Storico**: `frontend/src/data/releases.js`, dal rilascio più recente, con testi semplici per chi usa
+  l'app. Si apre cliccando su versione e data in fondo alla pagina.
+- **Popup "Novità"**: dopo un rilascio compare una volta per utente, con le novità dalle versioni non
+  ancora viste. L'ultima versione vista è salvata nelle preferenze dell'utente su Appwrite
+  (`last_seen_version`), quindi vale su tutti i dispositivi. Chi è stato creato dopo il rilascio non lo vede.
+
+Per un nuovo rilascio:
+1. aumentare la versione (patch `1.0.1` per correzioni, minor `1.1.0` per novità, major `2.0.0`
+   per grandi cambiamenti):
+   ```powershell
+   cd frontend; npm version 1.0.1 --no-git-tag-version
+   ```
+2. aggiungere in cima a `releases.js` una voce con la stessa `version`, la data e le novità;
+3. commit e push: Render pubblica e al primo accesso compare il popup.
+
 ## Sviluppo
 
 ```powershell

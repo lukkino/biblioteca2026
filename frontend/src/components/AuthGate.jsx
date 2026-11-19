@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import LoginPage from "@/components/LoginPage"
-import { getMe, logout as apiLogout } from "@/api/auth"
+import { getMe, logout as apiLogout, setVersioneVista } from "@/api/auth"
 import { errorMessage } from "@/api/client"
 import { AuthContext } from "@/lib/auth"
 
@@ -32,7 +32,17 @@ export default function AuthGate({ children }) {
     setState({ status: "out", notice: "Sei uscito dalla biblioteca." })
   }, [])
 
-  const ctx = useMemo(() => ({ user: state.user ?? null, logout }), [state.user, logout])
+  const markVersionSeen = useCallback(async (version) => {
+    try {
+      const user = await setVersioneVista(version)
+      setState((s) => (s.status === "in" ? { ...s, user } : s))
+    } catch { /* non grave: il popup ricomparirà al prossimo accesso */ }
+  }, [])
+
+  const ctx = useMemo(
+    () => ({ user: state.user ?? null, logout, markVersionSeen }),
+    [state.user, logout, markVersionSeen],
+  )
 
   if (state.status === "loading") {
     return (

@@ -2,6 +2,7 @@
 """API REST della Biblioteca.  Avvio:  uvicorn backend.main:app --reload --port 8000"""
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Literal
@@ -27,7 +28,19 @@ from backend.store_sql import SqlStore
 
 log = logging.getLogger("biblioteca")
 
-app = FastAPI(title="Biblioteca API", version="0.4.0")
+
+def _app_version() -> str:
+    # unica fonte della versione: "version" in frontend/package.json (copiato anche nell'immagine Docker)
+    try:
+        pkg = Path(__file__).resolve().parent.parent / "frontend" / "package.json"
+        return json.loads(pkg.read_text(encoding="utf-8"))["version"]
+    except (OSError, ValueError, KeyError):
+        return "sviluppo"
+
+
+APP_VERSION = _app_version()
+
+app = FastAPI(title="Biblioteca API", version=APP_VERSION)
 # tutte le API dei libri sono per una biblioteca: /api/b/{bid}/libri, /api/b/{bid}/generi, ...
 # e richiedono il login (se Appwrite è configurato)
 router = APIRouter(prefix="/api/b/{bid}", dependencies=[Depends(require_user)])
@@ -70,7 +83,7 @@ def _totale_libri(b: Biblioteca) -> int:
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": APP_VERSION}
 
 
 @app.get("/api/biblioteche", response_model=list[BibliotecaOut], dependencies=[Depends(require_user)])
